@@ -214,26 +214,15 @@ sndio_hw_constraint(snd_pcm_sndio_t *sndio)
 	if (err < 0)
 		return err;
 
-	err = snd_pcm_ioplug_set_param_minmax(io,
-	    SND_PCM_IOPLUG_HW_BUFFER_BYTES,
-	    64,
-		4 * 1024 * 1024);
-	if (err < 0)
-		return err;
-
-	err = snd_pcm_ioplug_set_param_minmax(io,
-	    SND_PCM_IOPLUG_HW_PERIOD_BYTES,
-	    64,
-		2 * 1024 * 1024);
-	if (err < 0)
-		return err;
-
-	err = snd_pcm_ioplug_set_param_minmax(io,
-	    SND_PCM_IOPLUG_HW_PERIODS,
-	    1,
-	    2048);
-	if(err < 0)
-		return err;
+	const char *cbufsz;
+	if ((cbufsz = getenv("ALSA_BUFSZ"))) {
+		err = snd_pcm_ioplug_set_param_minmax(io,
+			SND_PCM_IOPLUG_HW_BUFFER_BYTES,
+			1,
+			strtol(cbufsz, NULL, 10));
+		if (err < 0)
+			return err;
+	}
 
 	return 0;
 }
@@ -335,9 +324,20 @@ sndio_hw_params(snd_pcm_ioplug_t *io,
 	sndio->bpf =
 		((snd_pcm_format_physical_width(io->format) * io->channels) / 8);
 
+	const char *appbufsz;
+	snd_pcm_uframes_t periodsz = 0;
+	if ((appbufsz = getenv("ALSA_APPBUFSZ"))) {
+		periodsz = strtol(appbufsz, NULL, 10);
+	} else {
+		periodsz = (io->period_size > io->buffer_size ? io->period_size : io->buffer_size);
+	}
+	fprintf(stderr, "ALSA_BUFFER_SIZE: %u\n", io->buffer_size);
+	fprintf(stderr, "ALSA_PERIOD_SIZE: %u\n", io->period_size);
+	fprintf(stderr, "ALSA_APPBUFSZ: %u\n", periodsz);
+
 	par->bps = SIO_BPS(par->bits);
 	par->rate = io->rate;
-	par->appbufsz = io->period_size;
+	par->appbufsz = periodsz;
 
 	if (sio_setpar(sndio->hdl, par) == 0 ||
 	    sio_getpar(sndio->hdl, &retpar) == 0)
